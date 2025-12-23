@@ -1,14 +1,26 @@
 import * as THREE from 'three'
 import type { SketchEntity } from '../state/editorStore'
 import { uvToWorld, type PlaneBasis } from './planeMath'
+import { extractSketchRegions } from './regions'
 
 export class SketchSystem {
+  private fillGroup = new THREE.Group()
   private group = new THREE.Group()
   private basis: PlaneBasis | null = null
   private mat = new THREE.LineBasicMaterial({ color: 0xe6e8ee, transparent: true, opacity: 0.95 })
   private zOffset = 0.3
+  private fillMat = new THREE.MeshBasicMaterial({
+    color: 0xe6e8ee,
+    transparent: true,
+    opacity: 0.08,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  })
+  private fillZOffset = 0.12
 
   constructor(scene: THREE.Scene) {
+    this.fillGroup.name = 'sketchFillGroup'
+    scene.add(this.fillGroup)
     this.group.name = 'sketchGroup'
     scene.add(this.group)
   }
@@ -18,10 +30,27 @@ export class SketchSystem {
   }
 
   setEntities(entities: SketchEntity[], draft: SketchEntity | null = null) {
+    this.fillGroup.clear()
     this.group.clear()
     if (!this.basis) return
 
     const list = draft ? [...entities, draft] : entities
+
+    // 先渲染闭合区域填充（更淡颜色）
+    const regions = extractSketchRegions(list)
+    if (regions.length > 0) {
+      const planeMatrix = this.makePlaneMatrix(this.basis)
+      const offset = this.basis.normal.clone().multiplyScalar(this.fillZOffset)
+      for (const r of regions) {
+        const geo = new THREE.ShapeGeometry(r.shape, 24)
+        const mesh = new THREE.Mesh(geo, this.fillMat)
+        mesh.applyMatrix4(planeMatrix)
+        mesh.position.add(offset)
+        mesh.frustumCulled = false
+        this.fillGroup.add(mesh)
+      }
+    }
+
     for (const e of list) {
       const obj = this.entityToObject3D(e, this.basis)
       if (obj) this.group.add(obj)
@@ -29,8 +58,10 @@ export class SketchSystem {
   }
 
   dispose() {
+    this.fillGroup.clear()
     this.group.clear()
     this.mat.dispose()
+    this.fillMat.dispose()
   }
 
   private entityToObject3D(entity: SketchEntity, basis: PlaneBasis): THREE.Object3D | null {
@@ -77,6 +108,15 @@ export class SketchSystem {
     const line = new THREE.Line(geo, this.mat)
     line.frustumCulled = false
     return line
+  }
+
+  private makePlaneMatrix(basis: PlaneBasis) {
+    const u = basis.uAxis.clone().normalize()
+    const v = basis.vAxis.clone().normalize()
+    const n = basis.normal.clone().normalize()
+    const m = new THREE.Matrix4().makeBasis(u, v, n)
+    m.setPosition(basis.origin)
+    return m
   }
 }
 

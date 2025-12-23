@@ -75,6 +75,7 @@ export class InputController {
       useEditorStore.getState().setActivePlane(planeId)
       useEditorStore.getState().setMode('sketch')
       this.engine.setActivePlane(planeId)
+      this.engine.focusOnPlane(planeId)
       return
     }
 
@@ -84,6 +85,7 @@ export class InputController {
       if (planeId) {
         useEditorStore.getState().setActivePlane(planeId)
         this.engine.setActivePlane(planeId)
+        this.engine.focusOnPlane(planeId)
       }
     }
 
@@ -134,6 +136,8 @@ export class InputController {
   }
 
   private onPointerMove = (e: PointerEvent) => {
+    // 按住中键旋转时，不更新草图预览，避免误触
+    if ((e.buttons & 4) !== 0) return
     if (!this.drawing) return
     if (useEditorStore.getState().mode !== 'sketch') return
 

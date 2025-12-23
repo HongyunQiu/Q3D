@@ -1,0 +1,52 @@
+.root {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.hint {
+  font-size: 12px;
+  color: rgba(230, 232, 238, 0.75);
+}
+
+.group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.group button {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e6e8ee;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.group button:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.group button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.active {
+  border-color: rgba(255, 170, 80, 0.7) !important;
+  background: rgba(255, 170, 80, 0.16) !important;
+}
+
+.note {
+  font-size: 12px;
+  color: rgba(230, 232, 238, 0.6);
+  line-height: 1.4;
+}
+
+

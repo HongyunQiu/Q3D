@@ -1,5 +1,7 @@
 import { PropertiesPanel } from '../../ui/PropertiesPanel'
 import { Toolbar } from '../../ui/Toolbar'
+import { EntityToolbar } from '../../ui/EntityToolbar'
+import { ExtrudeBossDialog } from '../../ui/ExtrudeBossDialog'
 import { ThreeViewport } from '../../viewport/ThreeViewport'
 import styles from './editorLayout.module.css'
 
@@ -8,6 +10,7 @@ export function EditorLayout() {
     <div className={styles.root}>
       <aside className={styles.left}>
         <div className={styles.panelTitle}>工具 / 特征</div>
+        <EntityToolbar />
         <Toolbar />
       </aside>
 
@@ -19,6 +22,8 @@ export function EditorLayout() {
         <div className={styles.panelTitle}>属性</div>
         <PropertiesPanel />
       </aside>
+
+      <ExtrudeBossDialog />
     </div>
   )
 }

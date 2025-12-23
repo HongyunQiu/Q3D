@@ -4,13 +4,12 @@ import { useEditorStore } from '../state/editorStore'
 export function Toolbar() {
   const tool = useEditorStore((s) => s.tool)
   const setTool = useEditorStore((s) => s.setTool)
-  const mode = useEditorStore((s) => s.mode)
   const undo = useEditorStore((s) => s.undo)
   const redo = useEditorStore((s) => s.redo)
 
   return (
     <div className={styles.root}>
-      <div className={styles.hint}>模式：{mode === 'view' ? '视图' : '草图'}</div>
+      <div className={styles.hint}>草图绘制</div>
 
       <div className={styles.group}>
         <button

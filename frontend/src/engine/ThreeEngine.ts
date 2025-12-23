@@ -4,6 +4,10 @@ import { createBaselinePlanes, type BaselinePlane } from './createBaselinePlanes
 import { SketchSystem } from '../sketch/SketchSystem'
 import type { SketchEntity } from '../state/editorStore'
 import type { PlaneBasis } from '../sketch/planeMath'
+import type { EditorMode } from '../state/editorStore'
+import { extractSketchRegions } from '../sketch/regions'
+
+type OpResult = { ok: true } | { ok: false; message: string }
 
 export class ThreeEngine {
   private canvas: HTMLCanvasElement
@@ -15,6 +19,7 @@ export class ThreeEngine {
   private resizeObserver: ResizeObserver | null = null
   private baselinePlanes: BaselinePlane[] = []
   private sketchSystem: SketchSystem
+  private solidGroup = new THREE.Group()
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas
@@ -37,6 +42,16 @@ export class ThreeEngine {
     this.controls.enableDamping = true
     this.controls.dampingFactor = 0.08
     this.controls.screenSpacePanning = false
+    // 交互约定：仅在按住中键（滚轮按钮）拖拽时旋转场景；左键用于选面/绘制。
+    this.controls.mouseButtons = {
+      LEFT: THREE.MOUSE.PAN,
+      MIDDLE: THREE.MOUSE.ROTATE,
+      RIGHT: THREE.MOUSE.PAN,
+    }
+    // 为简化交互：禁用平移；保留缩放（滚轮）与中键旋转
+    this.controls.enablePan = false
+    this.controls.enableRotate = true
+    this.controls.enableZoom = true
 
     const ambient = new THREE.AmbientLight(0xffffff, 0.45)
     this.scene.add(ambient)
@@ -59,6 +74,8 @@ export class ThreeEngine {
     }
 
     this.sketchSystem = new SketchSystem(this.scene)
+    this.solidGroup.name = 'solidGroup'
+    this.scene.add(this.solidGroup)
   }
 
   start() {
@@ -130,6 +147,33 @@ export class ThreeEngine {
     }
   }
 
+  setEditorMode(mode: EditorMode) {
+    // 统一约定：旋转只用中键拖拽；左键留给选面/绘制。
+    // 目前 view/sketch 两种模式的轨道配置一致，仅保留入口用于后续扩展。
+    void mode
+    this.controls.enablePan = false
+    this.controls.enableRotate = true
+    this.controls.enableZoom = true
+  }
+
+  focusOnPlane(planeId: string) {
+    const basis = this.getPlaneBasis(planeId)
+    if (!basis) return
+
+    const target = basis.origin.clone()
+    const normal = basis.normal.clone().normalize()
+    const up = basis.vAxis.clone().normalize()
+
+    // 让相机正视该平面：相机位于法向方向一定距离处，up 方向对齐 vAxis
+    const dist = 360
+    this.controls.target.copy(target)
+    this.camera.up.copy(up)
+    this.camera.position.copy(target.clone().add(normal.multiplyScalar(dist)))
+    this.camera.lookAt(target)
+    this.camera.updateProjectionMatrix()
+    this.controls.update()
+  }
+
   updateSketch(planeId: string | null, entities: SketchEntity[], draft: SketchEntity | null = null) {
     if (!planeId) {
       this.sketchSystem.setPlaneBasis(null)
@@ -147,6 +191,46 @@ export class ThreeEngine {
       vAxis: plane.vAxis.clone(),
     })
     this.sketchSystem.setEntities(entities, draft)
+  }
+
+  extrudeBoss(planeId: string, entities: SketchEntity[], height: number): OpResult {
+    const basis = this.getPlaneBasis(planeId)
+    if (!basis) return { ok: false, message: '未找到当前平面的坐标系。' }
+    if (!Number.isFinite(height) || height <= 0) return { ok: false, message: '拉伸高度必须大于 0。' }
+
+    const regions = extractSketchRegions(entities)
+    if (regions.length === 0) {
+      return { ok: false, message: '当前平面未检测到可拉伸的闭合区域（请先绘制闭合轮廓，例如矩形/圆，或用线段闭合成环）。' }
+    }
+
+    const u = basis.uAxis.clone().normalize()
+    const v = basis.vAxis.clone().normalize()
+    const n = basis.normal.clone().normalize()
+    const m = new THREE.Matrix4().makeBasis(u, v, n)
+    m.setPosition(basis.origin)
+
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0x9ca3af,
+      metalness: 0.05,
+      roughness: 0.55,
+    })
+
+    for (const r of regions) {
+      const geom = new THREE.ExtrudeGeometry(r.shape, {
+        depth: height,
+        steps: 1,
+        bevelEnabled: false,
+      })
+      geom.computeVertexNormals()
+      const mesh = new THREE.Mesh(geom, mat)
+      mesh.applyMatrix4(m)
+      mesh.castShadow = false
+      mesh.receiveShadow = false
+      mesh.name = `solid_extrude_boss_${Date.now()}`
+      this.solidGroup.add(mesh)
+    }
+
+    return { ok: true }
   }
 }
 

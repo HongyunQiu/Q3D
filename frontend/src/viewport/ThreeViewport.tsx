@@ -11,6 +11,7 @@ export function ThreeViewport() {
   const activePlane = useEditorStore((s) => s.activePlane)
   const sketchEntities = useEditorStore((s) => s.sketchEntities)
   const draftEntity = useEditorStore((s) => s.draftEntity)
+  const mode = useEditorStore((s) => s.mode)
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -19,6 +20,7 @@ export function ThreeViewport() {
     const engine = new ThreeEngine(canvas)
     engineRef.current = engine
     engine.start()
+    useEditorStore.getState().setEngine(engine)
 
     const input = new InputController(canvas, engine)
     input.attach()
@@ -27,6 +29,7 @@ export function ThreeViewport() {
     return () => {
       inputRef.current?.detach()
       inputRef.current = null
+      useEditorStore.getState().setEngine(null)
       engineRef.current?.dispose()
       engineRef.current = null
     }
@@ -35,6 +38,10 @@ export function ThreeViewport() {
   useEffect(() => {
     engineRef.current?.updateSketch(activePlane, sketchEntities, draftEntity)
   }, [activePlane, sketchEntities, draftEntity])
+
+  useEffect(() => {
+    engineRef.current?.setEditorMode(mode)
+  }, [mode])
 
   return (
     <div className={styles.root}>

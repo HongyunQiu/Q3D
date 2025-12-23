@@ -1,8 +1,10 @@
 import { create } from 'zustand'
+import type { ThreeEngine } from '../engine/ThreeEngine'
 
 export type EditorMode = 'view' | 'sketch'
 export type SketchTool = 'select' | 'line' | 'rect' | 'circle'
 export type BaselinePlaneId = 'XY' | 'YZ' | 'ZX'
+export type EntityTool = 'none' | 'extrude_boss' | 'extrude_cut'
 
 export type Vec2 = { x: number; y: number }
 
@@ -14,6 +16,8 @@ export type SketchEntity =
 type EditorState = {
   mode: EditorMode
   tool: SketchTool
+  entityTool: EntityTool
+  engine: ThreeEngine | null
   activePlane: BaselinePlaneId | null
   gridSize: number
   snapEnabled: boolean
@@ -24,6 +28,8 @@ type EditorState = {
 
   setMode: (mode: EditorMode) => void
   setTool: (tool: SketchTool) => void
+  setEntityTool: (tool: EntityTool) => void
+  setEngine: (engine: ThreeEngine | null) => void
   setActivePlane: (plane: BaselinePlaneId | null) => void
   setGridSize: (grid: number) => void
   setSnapEnabled: (enabled: boolean) => void
@@ -37,6 +43,8 @@ type EditorState = {
 export const useEditorStore = create<EditorState>((set) => ({
   mode: 'view',
   tool: 'select',
+  entityTool: 'none',
+  engine: null,
   activePlane: null,
   gridSize: 5,
   snapEnabled: true,
@@ -47,6 +55,8 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   setMode: (mode) => set({ mode }),
   setTool: (tool) => set({ tool }),
+  setEntityTool: (entityTool) => set({ entityTool }),
+  setEngine: (engine) => set({ engine }),
   setActivePlane: (activePlane) => set({ activePlane }),
   setGridSize: (gridSize) => set({ gridSize }),
   setSnapEnabled: (snapEnabled) => set({ snapEnabled }),
