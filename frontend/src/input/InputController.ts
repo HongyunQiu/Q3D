@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import type { BaselinePlaneId, SketchEntity, Vec2 } from '../state/editorStore'
+import type { BaselinePlaneId, SketchEntity, Vec2, SketchPlane } from '../state/editorStore'
 import { useEditorStore } from '../state/editorStore'
 import type { ThreeEngine } from '../engine/ThreeEngine'
 import { snapUV, worldToUV } from '../sketch/planeMath'
@@ -47,8 +47,11 @@ export class InputController {
     if (e.key === 'Escape') {
       useEditorStore.getState().setMode('view')
       useEditorStore.getState().setActivePlane(null)
+      useEditorStore.getState().setSelectedSurface({ kind: 'none' })
+      useEditorStore.getState().setSketchPlane(null)
       useEditorStore.getState().setDraftEntity(null)
       this.engine.setActivePlane(null)
+      this.engine.clearSelectedFace()
       this.drawing = null
     }
   }
@@ -62,20 +65,69 @@ export class InputController {
     const y = -(((e.clientY - rect.top) / rect.height) * 2 - 1)
 
     this.raycaster.setFromCamera(new THREE.Vector2(x, y), this.engine.getCamera())
-    const hits = this.raycaster.intersectObjects(this.engine.getPickablePlaneMeshes(), false)
+    const hits = this.raycaster.intersectObjects(this.engine.getPickableObjects(), true)
     const hit = hits[0]
     const mode = useEditorStore.getState().mode
+    const entityTool = useEditorStore.getState().entityTool
+
+    // 实体特征“选择面”模式：仅选择平面/实体面，不进入草图也不绘制
+    if (entityTool === 'select_face') {
+      this.drawing = null
+      useEditorStore.getState().setDraftEntity(null)
+
+      if (!hit) {
+        useEditorStore.getState().setSelectedSurface({ kind: 'none' })
+        this.engine.setActivePlane(null)
+        this.engine.clearSelectedFace()
+        return
+      }
+
+      const planeId = (hit.object.userData?.planeId ?? null) as BaselinePlaneId | null
+      if (planeId) {
+        useEditorStore.getState().setSelectedSurface({ kind: 'baselinePlane', planeId })
+        this.engine.clearSelectedFace()
+        this.engine.setActivePlane(planeId)
+        return
+      }
+
+      const face = this.engine.highlightFaceFromIntersection(hit)
+      if (face) {
+        useEditorStore.getState().setSelectedSurface({
+          kind: 'solidFace',
+          objectName: face.objectName,
+          point: { x: face.point.x, y: face.point.y, z: face.point.z },
+          normal: { x: face.normal.x, y: face.normal.y, z: face.normal.z },
+        })
+        this.engine.setActivePlane(null)
+      }
+      return
+    }
 
     // In view mode: only handle plane selection.
     if (mode === 'view') {
       if (!hit) return
       const planeId = (hit.object.userData?.planeId ?? null) as BaselinePlaneId | null
-      if (!planeId) return
+      if (planeId) {
+        useEditorStore.getState().setSelectedSurface({ kind: 'baselinePlane', planeId })
+        this.engine.clearSelectedFace()
+        useEditorStore.getState().setActivePlane(planeId)
+        useEditorStore.getState().setSketchPlane({ kind: 'baselinePlane', planeId })
+        useEditorStore.getState().setMode('sketch')
+        this.engine.setActivePlane(planeId)
+        this.engine.focusOnPlane(planeId)
+        return
+      }
 
-      useEditorStore.getState().setActivePlane(planeId)
-      useEditorStore.getState().setMode('sketch')
-      this.engine.setActivePlane(planeId)
-      this.engine.focusOnPlane(planeId)
+      // Solid face selection
+      const face = this.engine.highlightFaceFromIntersection(hit)
+      if (face) {
+        useEditorStore.getState().setSelectedSurface({
+          kind: 'solidFace',
+          objectName: face.objectName,
+          point: { x: face.point.x, y: face.point.y, z: face.point.z },
+          normal: { x: face.normal.x, y: face.normal.y, z: face.normal.z },
+        })
+      }
       return
     }
 
@@ -83,16 +135,18 @@ export class InputController {
     if (hit) {
       const planeId = (hit.object.userData?.planeId ?? null) as BaselinePlaneId | null
       if (planeId) {
+        useEditorStore.getState().setSelectedSurface({ kind: 'baselinePlane', planeId })
         useEditorStore.getState().setActivePlane(planeId)
+        useEditorStore.getState().setSketchPlane({ kind: 'baselinePlane', planeId })
         this.engine.setActivePlane(planeId)
         this.engine.focusOnPlane(planeId)
       }
     }
 
-    const activePlane = useEditorStore.getState().activePlane
-    if (!activePlane) return
+    const sketchPlane = useEditorStore.getState().sketchPlane
+    if (!sketchPlane) return
 
-    const uv = this.getSnappedUV(activePlane, x, y)
+    const uv = this.getSnappedUVForSketchPlane(sketchPlane, x, y)
     if (!uv) return
 
     const tool = useEditorStore.getState().tool
@@ -141,13 +195,13 @@ export class InputController {
     if (!this.drawing) return
     if (useEditorStore.getState().mode !== 'sketch') return
 
-    const activePlane = useEditorStore.getState().activePlane
-    if (!activePlane) return
+    const sketchPlane = useEditorStore.getState().sketchPlane
+    if (!sketchPlane) return
 
     const rect = this.canvas.getBoundingClientRect()
     const x = ((e.clientX - rect.left) / rect.width) * 2 - 1
     const y = -(((e.clientY - rect.top) / rect.height) * 2 - 1)
-    const uv = this.getSnappedUV(activePlane, x, y)
+    const uv = this.getSnappedUVForSketchPlane(sketchPlane, x, y)
     if (!uv) return
 
     if (this.drawing.tool === 'line') {
@@ -159,16 +213,37 @@ export class InputController {
     }
   }
 
-  private getSnappedUV(planeId: BaselinePlaneId, ndcX: number, ndcY: number): Vec2 | null {
-    const basis = this.engine.getPlaneBasis(planeId)
-    const mesh = this.engine.getPlanePickMesh(planeId)
-    if (!basis || !mesh) return null
-
+  private getSnappedUVForSketchPlane(
+    sketchPlane: SketchPlane,
+    ndcX: number,
+    ndcY: number,
+  ): Vec2 | null {
     this.raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), this.engine.getCamera())
+
+    if (sketchPlane.kind === 'baselinePlane') {
+      const basis = this.engine.getPlaneBasis(sketchPlane.planeId)
+      const mesh = this.engine.getPlanePickMesh(sketchPlane.planeId)
+      if (!basis || !mesh) return null
+      const hits = this.raycaster.intersectObjects([mesh], false)
+      const hit = hits[0]
+      if (!hit) return null
+      const uv = worldToUV(hit.point, basis)
+      const snapEnabled = useEditorStore.getState().snapEnabled
+      const gridSize = useEditorStore.getState().gridSize
+      return snapEnabled ? snapUV(uv, gridSize) : uv
+    }
+
+    const mesh = this.engine.getDynamicSketchPickPlane()
+    if (!mesh) return null
+    const basis = {
+      origin: new THREE.Vector3(sketchPlane.origin.x, sketchPlane.origin.y, sketchPlane.origin.z),
+      normal: new THREE.Vector3(sketchPlane.normal.x, sketchPlane.normal.y, sketchPlane.normal.z),
+      uAxis: new THREE.Vector3(sketchPlane.uAxis.x, sketchPlane.uAxis.y, sketchPlane.uAxis.z),
+      vAxis: new THREE.Vector3(sketchPlane.vAxis.x, sketchPlane.vAxis.y, sketchPlane.vAxis.z),
+    }
     const hits = this.raycaster.intersectObjects([mesh], false)
     const hit = hits[0]
     if (!hit) return null
-
     const uv = worldToUV(hit.point, basis)
     const snapEnabled = useEditorStore.getState().snapEnabled
     const gridSize = useEditorStore.getState().gridSize

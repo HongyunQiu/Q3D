@@ -3,6 +3,7 @@ import { useEditorStore } from '../state/editorStore'
 
 export function PropertiesPanel() {
   const activePlane = useEditorStore((s) => s.activePlane)
+  const selectedSurface = useEditorStore((s) => s.selectedSurface)
   const gridSize = useEditorStore((s) => s.gridSize)
   const snapEnabled = useEditorStore((s) => s.snapEnabled)
   const setGridSize = useEditorStore((s) => s.setGridSize)
@@ -13,6 +14,17 @@ export function PropertiesPanel() {
       <div className={styles.row}>
         <div className={styles.label}>当前平面</div>
         <div className={styles.value}>{activePlane ?? '-'}</div>
+      </div>
+
+      <div className={styles.row}>
+        <div className={styles.label}>选中面</div>
+        <div className={styles.value}>
+          {selectedSurface.kind === 'none'
+            ? '-'
+            : selectedSurface.kind === 'baselinePlane'
+              ? `基准面 ${selectedSurface.planeId}`
+              : `实体面 ${selectedSurface.objectName}`}
+        </div>
       </div>
 
       <div className={styles.row}>

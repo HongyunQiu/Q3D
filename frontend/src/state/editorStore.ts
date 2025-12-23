@@ -4,9 +4,19 @@ import type { ThreeEngine } from '../engine/ThreeEngine'
 export type EditorMode = 'view' | 'sketch'
 export type SketchTool = 'select' | 'line' | 'rect' | 'circle'
 export type BaselinePlaneId = 'XY' | 'YZ' | 'ZX'
-export type EntityTool = 'none' | 'extrude_boss' | 'extrude_cut'
+export type EntityTool = 'none' | 'select_face' | 'extrude_boss' | 'extrude_cut'
 
 export type Vec2 = { x: number; y: number }
+export type Vec3 = { x: number; y: number; z: number }
+
+export type SelectedSurface =
+  | { kind: 'none' }
+  | { kind: 'baselinePlane'; planeId: BaselinePlaneId }
+  | { kind: 'solidFace'; objectName: string; point: Vec3; normal: Vec3 }
+
+export type SketchPlane =
+  | { kind: 'baselinePlane'; planeId: BaselinePlaneId }
+  | { kind: 'solidFace'; origin: Vec3; normal: Vec3; uAxis: Vec3; vAxis: Vec3 }
 
 export type SketchEntity =
   | { id: string; type: 'line'; a: Vec2; b: Vec2 }
@@ -19,6 +29,8 @@ type EditorState = {
   entityTool: EntityTool
   engine: ThreeEngine | null
   activePlane: BaselinePlaneId | null
+  selectedSurface: SelectedSurface
+  sketchPlane: SketchPlane | null
   gridSize: number
   snapEnabled: boolean
   sketchEntities: SketchEntity[]
@@ -31,6 +43,8 @@ type EditorState = {
   setEntityTool: (tool: EntityTool) => void
   setEngine: (engine: ThreeEngine | null) => void
   setActivePlane: (plane: BaselinePlaneId | null) => void
+  setSelectedSurface: (s: SelectedSurface) => void
+  setSketchPlane: (p: SketchPlane | null) => void
   setGridSize: (grid: number) => void
   setSnapEnabled: (enabled: boolean) => void
   setSketchEntities: (entities: SketchEntity[]) => void
@@ -38,6 +52,7 @@ type EditorState = {
   commitEntities: (entities: SketchEntity[]) => void
   undo: () => void
   redo: () => void
+  resetSketch: () => void
 }
 
 export const useEditorStore = create<EditorState>((set) => ({
@@ -46,6 +61,8 @@ export const useEditorStore = create<EditorState>((set) => ({
   entityTool: 'none',
   engine: null,
   activePlane: null,
+  selectedSurface: { kind: 'none' },
+  sketchPlane: null,
   gridSize: 5,
   snapEnabled: true,
   sketchEntities: [],
@@ -58,6 +75,8 @@ export const useEditorStore = create<EditorState>((set) => ({
   setEntityTool: (entityTool) => set({ entityTool }),
   setEngine: (engine) => set({ engine }),
   setActivePlane: (activePlane) => set({ activePlane }),
+  setSelectedSurface: (selectedSurface) => set({ selectedSurface }),
+  setSketchPlane: (sketchPlane) => set({ sketchPlane }),
   setGridSize: (gridSize) => set({ gridSize }),
   setSnapEnabled: (snapEnabled) => set({ snapEnabled }),
   setSketchEntities: (sketchEntities) => set({ sketchEntities }),
@@ -91,6 +110,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         draftEntity: null,
       }
     }),
+  resetSketch: () => set({ sketchEntities: [], draftEntity: null, past: [], future: [] }),
 }))
 
 

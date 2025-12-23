@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import styles from './extrudeBossDialog.module.css'
 import { useEditorStore } from '../state/editorStore'
+import * as THREE from 'three'
 
 export function ExtrudeBossDialog() {
   const entityTool = useEditorStore((s) => s.entityTool)
@@ -13,9 +14,11 @@ export function ExtrudeBossDialog() {
   const setActivePlane = useEditorStore((s) => s.setActivePlane)
   const setDraftEntity = useEditorStore((s) => s.setDraftEntity)
   const setTool = useEditorStore((s) => s.setTool)
+  const sketchPlane = useEditorStore((s) => s.sketchPlane)
+  const setSketchPlane = useEditorStore((s) => s.setSketchPlane)
 
   const open = entityTool === 'extrude_boss'
-  const disabled = mode !== 'sketch' || !activePlane || !engine
+  const disabled = mode !== 'sketch' || !engine || (!sketchPlane && !activePlane)
 
   const [heightText, setHeightText] = useState('20')
   const height = useMemo(() => Number(heightText), [heightText])
@@ -26,7 +29,7 @@ export function ExtrudeBossDialog() {
 
   const onConfirm = () => {
     if (disabled) {
-      alert('请先选择一个基准面进入草图。')
+      alert('请先在某个面上创建新草图并进入草图模式。')
       return
     }
     if (!Number.isFinite(height) || height <= 0) {
@@ -34,7 +37,22 @@ export function ExtrudeBossDialog() {
       return
     }
 
-    const result = engine.extrudeBoss(activePlane, sketchEntities, height)
+    let result: { ok: true } | { ok: false; message: string }
+    if (sketchPlane?.kind === 'solidFace') {
+      const basis = {
+        origin: new THREE.Vector3(sketchPlane.origin.x, sketchPlane.origin.y, sketchPlane.origin.z),
+        normal: new THREE.Vector3(sketchPlane.normal.x, sketchPlane.normal.y, sketchPlane.normal.z),
+        uAxis: new THREE.Vector3(sketchPlane.uAxis.x, sketchPlane.uAxis.y, sketchPlane.uAxis.z),
+        vAxis: new THREE.Vector3(sketchPlane.vAxis.x, sketchPlane.vAxis.y, sketchPlane.vAxis.z),
+      }
+      result = engine.extrudeBossOnBasis(basis, sketchEntities, height)
+    } else {
+      if (!activePlane) {
+        alert('请先在某个面上创建新草图并进入草图模式。')
+        return
+      }
+      result = engine.extrudeBoss(activePlane, sketchEntities, height)
+    }
     if (!result.ok) {
       alert(result.message)
       return
@@ -46,6 +64,7 @@ export function ExtrudeBossDialog() {
     setTool('select')
     setMode('view')
     setActivePlane(null)
+    setSketchPlane(null)
     engine.setActivePlane(null)
   }
 
