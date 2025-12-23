@@ -1,0 +1,16 @@
+.root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #0b0d12;
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+
